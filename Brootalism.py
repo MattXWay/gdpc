@@ -17,9 +17,9 @@ z = buildArea.offset.z + 1
 
 y = heightmap[3,3] - 1
 
-width = randint(20, 25)
-height = randint(18, 20)
-depth  = randint(20, 25)
+width = randint(35, 55)
+height = randint(30, 50)
+depth  = randint(40, 60)
 
 # Random floor palette
 blockPalette = [
@@ -49,6 +49,11 @@ def buildStructurePerimeter():
                     editor.placeBlock((x + i, y + h, z + j), blockPalette)
                 if((j == 0)) or (j == depth-1):
                     editor.placeBlock((x + i, y + h, z + j), blockPalette)
+                    if(i==int((width/2))):
+                        placeCuboid(editor, (x + i - 3, y+1, z + j), (x + i + 3 , y+3, z + j), Block("Air"))
+                        placeCuboid(editor, (x + i - 1, y+4, z + j), (x + i - 2, y+4, z + j), Block("oak_leaves"))
+                        print("making window")
+                        
 
 roofWidthOffset = randint(2, 10)
 roofDepthOffset = randint(0, 10)
@@ -64,26 +69,47 @@ def buildStructureRoof():
 def cleanInterior():
     placeCuboid(editor, (x+1, y+1, z+1), (x+width-2, y+height-2, z+depth-2), Block("air"))
 
-staircaseWidth = randint(3,5)
 staircaseVector = randint(5,7)
 
-stairPalette = [
+stairPaletteFirst = [
     Block("polished_diorite_stairs", {"facing": "north"}),
     Block("stone_brick_stairs", {"facing": "north"}),
     Block("mossy_stone_brick_stairs", {"facing": "north"}),
-    Block("smooth_quartz_stairs", {"facing": "north"}),
+]
+
+stairPaletteSecond = [
+    Block("polished_diorite_stairs", {"facing": "east"}),
+    Block("stone_brick_stairs", {"facing": "east"}),
+    Block("mossy_stone_brick_stairs", {"facing": "east"}),
 ]
 
 def buildStructureStairs():
     for i in range(0, staircaseVector):
-        placeCuboid(editor, (x+1+staircaseWidth,y+1+i,z+1+staircaseVector-i), (x+1, y+1+i, z+1+staircaseVector+i), stairPalette)
-        # add here another cuboid, with solid blokcs, so that it's not just a floating staircase
+        # first we place the stairs that connect to the ground
+        placeCuboid(editor, (x+1,y+1+i,z+1+(staircaseVector*2)-i), (x+1+staircaseVector, y+1+i, z+1+(staircaseVector*2)-i), stairPaletteFirst)
+        # add here another cuboid, with solid blocks, so that it's not just a floating staircase
+        placeCuboid(editor, (x+1,y+1+i,z+(staircaseVector*2)-i), (x+1+staircaseVector, y+1+i, z+(staircaseVector*2)-i), blockPalette)
 
+        #and then, we place the other stairs going to the actual second floor.
+        placeCuboid(editor, (x+2+staircaseVector+i, y+1+staircaseVector+i, z+1+staircaseVector), (x+2+staircaseVector+i,y+1+staircaseVector+i, z+1), stairPaletteSecond)
+        #and then, the connecting solid blocks
+        placeCuboid(editor, (x+3+staircaseVector+i, y+1+staircaseVector+i, z+1+staircaseVector), (x+3+staircaseVector+i,y+1+staircaseVector+i, z+1), blockPalette)
+
+
+        # now, we place the "intermediate" platform
+        if(i == staircaseVector-1):
+            placeCuboid(editor, (x+1, y+1+i, z + staircaseVector -i), (x+1+staircaseVector, y+1+i, z+1+staircaseVector), blockPalette)
+            
+
+def buildStructureFloor():
+    floorsize = randint(width//2, width//4)
+    placeCuboid(editor, (x+1+(staircaseVector*2),y,z+1+(staircaseVector*2)), (x+1+staircaseVector+floorsize,y+staircaseVector*2,z+1+(staircaseVector*2)+floorsize), blockPalette)
 
 buildStructurePerimeter()
 buildStructureRoof()
 cleanInterior()
 buildStructureStairs()
+buildStructureFloor()
             #placeCuboidHollow(editor, (x, y, z), (x+width, y+height, z+depth), blockPalette)
         
 
