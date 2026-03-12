@@ -41,6 +41,21 @@ statuePalette = (
     2*[Block("polished_andesite"), Block("air")]
 )
 
+balconyRailPalette = [
+    Block("stone_brick_wall"),
+    Block("mossy_stone_brick_wall"),
+    Block("stone_brick_wall"),
+]
+
+ornamentPalette = (
+    5*[Block("copper_block")] +
+    5*[Block("exposed_copper")] +
+    [Block("weathered_copper")] +
+    [Block("oxidized_copper")] +
+    [Block("air")]
+    
+)
+
 # this places the top and bottom edges, using placeblock to get random block at each thing.
 def buildStructurePerimeter():
     # floor first
@@ -89,7 +104,7 @@ def buildStructureRoof():
 def cleanInterior():
     placeCuboid(editor, (x+1, y+1, z+1), (x+width-2, y+height-2, z+depth-2), Block("air"))
 
-staircaseVector = randint(5,7)
+staircaseVector = randint(5,width//6)
 
 stairPaletteFirst = [
     Block("polished_diorite_stairs", {"facing": "north"}),
@@ -125,7 +140,7 @@ def buildStructureStairs():
                 editor.placeBlock((x+1+j, y+1+i-1, z + 1+staircaseVector), Block("pearlescent_froglight"))
             
             
-floorsize = randint((width//4), (width//2))
+floorsize = randint((width//4), ((width//2) - (staircaseVector)))
 
 def buildStructureFloor():
     #print(floorsize)
@@ -141,7 +156,8 @@ def buildStructureFloor():
     
         
 
-def buildStatue():
+def decorate():
+    # statue parameters
     statueWidth = randint(3, floorsize//2)
     statueHeight = randint(10, staircaseVector*2)
     statueDepth = randint(3, floorsize//2)
@@ -150,7 +166,7 @@ def buildStatue():
     statueY = y + 1 + (staircaseVector*2)
     statueZ = z + 1 + (staircaseVector*2) + (floorsize//2) - (statueDepth//2)
 
-    # now to place blocks at the correct spot to make it look like a person
+    # build the statue
     for i in range(0, statueHeight):
         for j in range(0, statueWidth):
             for k in range(0, statueDepth):
@@ -166,8 +182,8 @@ def buildStatue():
                     if(j == 0 or j == statueWidth-1):
                         editor.placeBlock((statueX + j, statueY + i, statueZ + k), statuePalette)
 
-def buildPillars():
-    # add some random small, but chunky pillars in the interior for decoration, maybe with some vines hanging from them
+
+    # add some random small, but chunky pillars. Randomized decoration - could be more intentional later.
     numPillars = randint(8, 16)
     
 
@@ -181,35 +197,106 @@ def buildPillars():
         for j in range(0, pillarHeight):
             if(randint(0,100) < 20): 
                 editor.placeBlock((pillarX, y+1+j, pillarZ), Block("vine"))
-    
-    
 
+    # balcony time! - 70% chance to spawn
+    if(randint(0,100) < 70):
+        balconyLength = randint(3,5)
+        balconyWidth = randint(5, floorsize//2)
+        for i in range(0, balconyWidth):
+            for j in range(0, balconyLength):
+                if (j == 0):
+                    # implementing this to have empty spaces in the stairs 
+                    if (i != 0 and i != balconyWidth-1):
+                        # there could be a separate value here for balconyX to not use the same, as sometimes it can be one block off being centered. Due to time constrain I don't solve this right now
+                        editor.placeBlock((statueX+statueWidth//2-(balconyWidth//2)+i, statueY, z+1+(staircaseVector*2)+floorsize+j), Block("stone_brick_stairs", {"facing": "south"}))
+                        
+                # make stairs leading to the balcony
+                else:
+                    editor.placeBlock((statueX+statueWidth//2-(balconyWidth//2)+i, statueY, z+1+(staircaseVector*2)+floorsize+j), blockPalette)
+                
+                # then at the edges (gotta calculate), make a ledge of sorts to make it look nicer than just blocks
+                if (((i >= 0 and i <= balconyWidth-1) and (j == balconyLength-1)) or ((i == 0 or i == balconyWidth-1) and (j >= 1 and j < balconyLength-1))):
+                    editor.placeBlock(((statueX+statueWidth//2-(balconyWidth//2)+i, statueY+1, z+1+(staircaseVector*2)+floorsize+j)), balconyRailPalette)
+    
+def hang_ornament():
+    if(randint(0,100) < 100):
+        ornamentSize = randint(3, 7)
 
+        # center point of ornament
+        cx = x + width - 2 - ornamentSize*2
+        cz = z + depth - 2 - ornamentSize*2
+
+        # random chain length - long enough to reach the roof, but not too long to look weird. Also adds some variation in the hanging ornaments.
+        chain_length = randint(5, ornamentSize + 2)
+
+        # place slightly random chain
+        for k in range(chain_length):
+            editor.placeBlock(
+                (cx, y + height - k, cz), Block("iron_chain")
+            )
+
+        # starting Y for pyramid
+        base_y = y + height - chain_length
+
+        # upside-down pyramid converging to center
+        for level in range(ornamentSize):
+            size = ornamentSize - level
+
+            for dx in range(-size, size + 1):
+                for dz in range(-size, size + 1):
+                    editor.placeBlock((cx - dx, base_y - level, cz - dz), ornamentPalette)
+
+def buildRooms():
+    # small rooms on the ground level, with a 50% chance to generate each room, and random sizes and positions. They will be hollowed out of the main structure, so they will be empty inside. but have doors and windows. They will be placed on the perimeter of the structure, so they will have at least one wall that is also a wall of the main structure. This is to make them look more integrated into the main structure, rather than just being attached to it.
+    numRooms = randint(2, 5)
+    for i in range(0, numRooms):
+        roomWidth = randint(5, width//3)
+        roomDepth = randint(5, depth//3)
+        roomHeight = randint(4, staircaseVector*2 - 2)
+
+        # random position for the room
+        wall = randint(0, 1) # 0 = east, 1 = south; noth and west are skipped because we have the staircase and entrance there.
+        if wall == 0: # east wall
+            roomX = x + width - roomWidth - 1
+            roomZ = randint(z + 2, z + depth - roomDepth - 2)
+        else: # south wall
+            roomX = randint(x + 2, x + width - roomWidth - 2)
+            roomZ = z + depth - roomDepth - 1
+
+        # build the room as a hollow cuboid
+        placeCuboidHollow(editor, (roomX, y, roomZ), (roomX + roomWidth, y + roomHeight, roomZ + roomDepth), blockPalette)
+        # and add lightning at random spots on the ceiling of the room, with a 30% chance to place a light block at each position, to make it look more lived in and less like a dungeon. Using froglights for the lighting, and placing them randomly on the ceiling of the room.
+        for j in range(0, roomWidth):
+            for k in range(0, roomDepth):
+                if(randint(0,100) < 30):
+                    editor.placeBlock((roomX + j, y + roomHeight - 1, roomZ + k), Block("pearlescent_froglight"))
+
+        # and then add some windows and a door to the room, with a 50% chance for each wall to have a window, and a 50% chance for the room to have a door. The door will be placed on the wall that is not shared with the main structure, to make it look more natural.
+        for j in range(0, roomWidth):
+            for k in range(0, roomHeight):
+                if wall == 0: # east wall
+                    editor.placeBlock((roomX + roomWidth, y + 1 + k, roomZ + j), Block("glass_pane"))
+                else: # south wall
+                    editor.placeBlock((roomX + j, y + 1 + k, roomZ + roomDepth), Block("glass_pane"))
+        
+        
+        doorHeight = 2
+        doorWidth = 1
+
+        if wall == 0: # east wall
+            placeCuboid(editor, (roomX, y + 1, roomZ + roomDepth//2 - doorWidth//2), (roomX, y + 1 + doorHeight, roomZ + roomDepth//2 + doorWidth//2), Block("air"))
+            editor.placeBlock((roomX, y + 1, roomZ + roomDepth//2), Block("oak_door", {"facing": "east", "half": "lower"}))
+            editor.placeBlock((roomX, y + 2, roomZ + roomDepth//2), Block("oak_door", {"facing": "east", "half": "upper"}))
+        else: # south wall
+            placeCuboid(editor, (roomX + roomWidth//2 - doorWidth//2, y + 1, roomZ), (roomX + roomWidth//2 + doorWidth//2, y  + doorHeight, roomZ), Block("air"))
+            editor.placeBlock((roomX + roomWidth//2, y + 1, roomZ), Block("oak_door", {"facing": "south", "half": "lower"}))
+            editor.placeBlock((roomX + roomWidth//2, y + 2, roomZ), Block("oak_door", {"facing": "south", "half": "upper"}))
 
 buildStructurePerimeter()
 buildStructureRoof()
 cleanInterior()
 buildStructureStairs()
 buildStructureFloor()
-buildStatue()
-buildPillars()
-
-            
-        
-
-
-    
-
-# Build roof: loop through distance from the middle
-# for dx in range(1, 4):
-#     yy = y + height + 2 - dx
-
-#     # Build row of stairs blocks
-#     leftBlock  = Block("oak_stairs", {"facing": "east"})
-#     rightBlock = Block("oak_stairs", {"facing": "west"})
-#     placeCuboid(editor, (x+2-dx, yy, z-1), (x+2-dx, yy, z+depth+1), leftBlock)
-#     placeCuboid(editor, (x+2+dx, yy, z-1), (x+2+dx, yy, z+depth+1), rightBlock)
-
-# build the top row of the roof
-# yy = y + height + 1
-# placeCuboid(editor, (x+2, yy, z-1), (x+2, yy, z+depth+1), Block("oak_planks"))
+decorate()
+hang_ornament()
+buildRooms()
