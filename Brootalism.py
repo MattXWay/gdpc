@@ -15,7 +15,18 @@ heightmap = editor.worldSlice.heightmaps["MOTION_BLOCKING_NO_LEAVES"]
 x = buildArea.offset.x + 1
 z = buildArea.offset.z + 1
 
-y = heightmap[3,3] - 1
+terrain = [[0,0]]
+
+
+for i in range(0, buildArea.size.x):
+    for j in range(0, buildArea.size.z):
+        terrain.append(heightmap[i,j])
+
+
+y = terrain[len(terrain)-1]
+
+
+#y = heightmap[3,3] - 1
 
 width = randint(35, 55)
 height = randint(30, 50)
