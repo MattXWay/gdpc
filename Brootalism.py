@@ -230,7 +230,7 @@ def decorate():
                     editor.placeBlock(((statueX+statueWidth//2-(balconyWidth//2)+i, statueY+1, z+1+(staircaseVector*2)+floorsize+j)), balconyRailPalette)
     
 def hang_ornament():
-    if(randint(0,100) < 100):
+    if(randint(0,100) < 50):
         ornamentSize = randint(3, 7)
 
         # center point of ornament
