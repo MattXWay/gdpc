@@ -3,6 +3,8 @@ shinto_shrine.py  —  MGAIA Retake Assignment 1, Leiden University 2026
 Procedurally generates a Shinto shrine complex using GDPC.
 """
 
+#if you want to make a the width of the shrine grounds smaller, you can use
+
 import sys
 import math
 import random
@@ -109,6 +111,12 @@ STONE_PALETTE = [
     Block("cracked_stone_bricks"),
     Block("mossy_stone_bricks"),
 ]
+WOOD_PALETTE = [
+    3*[Block("spruce_planks")],
+    Block("acacia_planks"),
+    Block("mangrove_planks"),
+    Block("pale_oak_planks"),
+]
 
 PILLAR_BLOCK    = Block("red_concrete")              # red structural pillars
 BEAM_BLOCK      = Block("red_concrete")              # red eave beams
@@ -196,11 +204,31 @@ class ShrineBuilder:
         self.facing = facing
         self.scale  = scale
         s = scale
-        self.hall_w          = 7 + s * 2
-        self.hall_d          = 9 + s * 2
-        self.hall_h          = 7 + s
-        self.path_len        = 12 + s * 4
-        self.torii_count     = RNG.randint(1, 2 + s)
+
+        # ── Honden (main hall) ──────────────────────────────────────────────
+        self.hall_w  = 7 + s * 2          # total width
+        self.hall_d  = 9 + s * 2          # depth front→back
+        self.hall_h  = 7 + s
+
+        # ── Haiden (prayer hall) ────────────────────────────────────────────
+        self.hd_w    = self.hall_w + 6    # wider than honden
+        self.hd_d    = 7 + s              # depth
+        self.hd_h    = self.hall_h - 1
+
+        # ── Explicit linear layout (dz = forward from origin) ───────────────
+        # origin (dz=0) = entrance face of haiden (where players walk in)
+        # everything forward of origin is positive dz.
+        GAP          = 10                   # gap between haiden back and honden front
+        self.haiden_fwd_front = 0          # haiden entrance face
+        self.haiden_fwd_back  = self.hd_d  # haiden back wall
+        self.honden_fwd_start = self.hd_d + GAP          # honden front wall
+        self.honden_fwd_end   = self.honden_fwd_start + self.hall_d  # honden back wall
+
+        # ── Path & torii (negative dz = in front of haiden entrance) ───────
+        self.path_len    = 20 + s * 4     # path from origin back to first torii
+        self.torii_count = RNG.randint(1, 2 + s)
+
+        # ── Variation ───────────────────────────────────────────────────────
         self.has_lanterns    = RNG.random() < 0.85
         self.has_fence       = RNG.random() < 0.70
         self.has_offering    = RNG.random() < 0.60
@@ -269,11 +297,14 @@ class ShrineBuilder:
     # -----------------------------------------------------------------------
 
     def build_path(self):
-        path_w = 3
-        for fwd in range(-1, self.path_len + 1):
-            for side in range(-path_w // 2, path_w // 2 + 1):
+        # Path runs from -path_len (torii approach) to honden back wall
+        path_w    = 3
+        fwd_start = -self.path_len
+        fwd_end   = self.honden_fwd_end
+        for fwd in range(fwd_start, fwd_end + 1):
+            for side in range(-path_w // 2+1, path_w // 2+1):
                 bx, by, bz = self.w(side, fwd, 0)
-                place(bx, by - 1, bz, GRAVEL)
+                place(bx, by - 1, bz, Block("spruce_planks"))
                 place(bx, by,     bz, AIR)
 
     # -----------------------------------------------------------------------
@@ -281,13 +312,14 @@ class ShrineBuilder:
     # -----------------------------------------------------------------------
 
     def build_lanterns(self):
+        # Lanterns line the approach path (negative fwd) and the courtyard
         spacing = self.lantern_spacing
-        for fwd in range(spacing, self.path_len, spacing):
+        for fwd in range(-self.path_len + spacing, self.haiden_fwd_front, spacing):
             for side in (-2, 2):
                 bx, by, bz = self.w(side, fwd, 0)
                 place(bx, by,     bz, Block("stone_brick_wall"))
                 place(bx, by + 1, bz, Block("stone_brick_wall"))
-                place(bx, by + 2, bz, STONE_SLAB)
+                place(bx, by + 2, bz, Block("stone_bricks"))
                 place(bx, by + 3, bz, LANTERN)
 
     # -----------------------------------------------------------------------
@@ -295,17 +327,21 @@ class ShrineBuilder:
     # -----------------------------------------------------------------------
 
     def build_fence(self):
-        hw        = self.hall_w // 2 + 2
-        gate_half = 1
-        back      = self.hall_d + 3
+        # Fence wraps only the honden block (not haiden)
+        hw   = self.hall_w // 2 + 2
+        f0   = self.honden_fwd_start - 1   # just in front of honden
+        f1   = self.honden_fwd_end   + 1   # just behind honden
+        # Front fence (leave 3-wide opening for path)
         for side in range(-hw, hw + 1):
-            if abs(side) > gate_half:
-                bx, by, bz = self.w(side, 0, 0)
+            if abs(side) > 1:
+                bx, by, bz = self.w(side, f0, 0)
                 place(bx, by, bz, Block("stone_brick_wall"))
+        # Back fence
         for side in range(-hw, hw + 1):
-            bx, by, bz = self.w(side, back, 0)
+            bx, by, bz = self.w(side, f1, 0)
             place(bx, by, bz, Block("stone_brick_wall"))
-        for fwd in range(1, back):
+        # Side fences
+        for fwd in range(f0, f1 + 1):
             bx, by, bz = self.w(-hw, fwd, 0)
             place(bx, by, bz, Block("stone_brick_wall"))
             bx, by, bz = self.w( hw, fwd, 0)
@@ -319,7 +355,7 @@ class ShrineBuilder:
         hw        = self.hall_w // 2
         d         = self.hall_d
         h         = self.hall_h
-        fwd_start = 2
+        fwd_start = self.honden_fwd_start
 
         # Stone foundation under hall
         fill_palette(*self.w(-hw - 1, fwd_start,     -1),
@@ -375,7 +411,7 @@ class ShrineBuilder:
              AIR)
         fill_palette(*self.w(-hw + 1, fwd_start + 1, 0),
                      *self.w( hw - 1, fwd_start + d - 1, 0),
-                     STONE_PALETTE)
+                     WOOD_PALETTE)
 
         # Shoji glass pane windows in the white middle band
         for fwd in range(fwd_start + 1, fwd_start + d):
@@ -492,16 +528,149 @@ class ShrineBuilder:
             bx, by, bz = self.w(0, fwd_off, ceil_y - 2)
             place(bx, by, bz, HANGING_LANTERN)
 
+    # -----------------------------------------------------------------------
+    # Haiden — offering / prayer hall in front of the honden
+    # -----------------------------------------------------------------------
+
+    def build_haiden(self):
+        """
+        The haiden sits directly in front of the honden, separated by a
+        short gap, and faces the same direction.  It is wider and more open
+        than the honden: the front face is entirely open (no wall), the side
+        walls are only knee-height railings, and a thick shimenawa rope
+        (chain + bell) hangs from the ceiling centre so worshippers can ring
+        it while praying.
+
+        Layout (local coords, dz < 0 = in front of honden):
+          fwd 0          = honden front wall
+          fwd -gap       = haiden back wall
+          fwd -gap-hd_d  = haiden front (open)
+
+        The haiden shares the same red/white aesthetic: red concrete pillars
+        at corners, white concrete side walls (low, 2 blocks), red eave beam,
+        warped plank roof (flat single layer), copper slab overhang.
+        """
+        hd_hw     = self.hd_w // 2
+        hd_h      = self.hd_h
+        fwd_front = self.haiden_fwd_front    # entrance face (open)
+        fwd_back  = self.haiden_fwd_back     # back wall (faces honden)
+
+        # --- Stone plinth ---
+        fill_palette(*self.w(-hd_hw - 1, fwd_front,  0),
+                     *self.w( hd_hw + 1, fwd_back,   0),
+                     STONE_PALETTE)
+
+        # --- Front stairs (open face — 3 steps, full width) ---
+        for step in range(3):
+            for dx in range(-hd_hw, hd_hw + 1):
+                bx, by, bz = self.w(dx, fwd_front - step, -step)
+                place(bx, by, bz, rand_stone())
+
+        # --- Corner pillars ---
+        for side in (-hd_hw, hd_hw):
+            for fwd in (fwd_front, fwd_back):
+                for dy in range(1, hd_h + 1):
+                    bx, by, bz = self.w(side, fwd, dy)
+                    place(bx, by, bz, PILLAR_BLOCK)
+
+        # --- Back wall (solid, faces honden) ---
+        for dy in range(1, hd_h):
+            for dx in range(-hd_hw, hd_hw + 1):
+                bx, by, bz = self.w(dx, fwd_back, dy)
+                place(bx, by, bz, self._wall_mat(dy, hd_h))
+
+        # --- Side walls: low railing only (3 blocks tall, open above) ---
+        for fwd in range(fwd_front + 1, fwd_back):
+            for dy in range(1, 3):
+                for side in (-hd_hw, hd_hw):
+                    bx, by, bz = self.w(side, fwd, dy)
+                    place(bx, by, bz, self._wall_mat(dy, hd_h))
+            # Red crimson fence on top of the low wall as railing
+            for side in (-hd_hw, hd_hw):
+                bx, by, bz = self.w(side, fwd, 3)
+                place(bx, by, bz, RAILING_BLOCK)
+
+        # --- Front face: open — only corner pillar and a fence railing ---
+        for dx in range(-hd_hw, hd_hw + 1):
+            if abs(dx) > 1:
+                bx, by, bz = self.w(dx, fwd_front, 1)
+                place(bx, by, bz, RAILING_BLOCK)
+
+        # --- Interior floor ---
+        fill_palette(*self.w(-hd_hw + 1, fwd_front + 1, 0),
+                     *self.w( hd_hw - 1, fwd_back  - 1, 0),
+                     WOOD_PALETTE)
+
+        # --- Eave beam ring ---
+        eave_y = hd_h + 1
+        for dx in range(-hd_hw - 1, hd_hw + 2):
+            bx, by, bz = self.w(dx, fwd_front, eave_y)
+            place(bx, by, bz, BEAM_BLOCK)
+            bx, by, bz = self.w(dx, fwd_back, eave_y)
+            place(bx, by, bz, BEAM_BLOCK)
+        for fwd in range(fwd_front, fwd_back + 1):
+            bx, by, bz = self.w(-hd_hw - 1, fwd, eave_y)
+            place(bx, by, bz, BEAM_BLOCK_Z)
+            bx, by, bz = self.w( hd_hw + 1, fwd, eave_y)
+            place(bx, by, bz, BEAM_BLOCK_Z)
+
+        # --- Flat warped plank roof with copper slab overhang ---
+        overhang = 2
+        for dx in range(-hd_hw - overhang, hd_hw + overhang + 1):
+            for fwd in range(fwd_front - overhang, fwd_back + overhang + 1):
+                bx, by, bz = self.w(dx, fwd, eave_y)
+                place(bx, by, bz, ROOF_BLOCK)
+        # Copper slab overhang on all four edges
+        for fwd in range(fwd_front - overhang, fwd_back + overhang + 1):
+            bx, by, bz = self.w(-hd_hw - overhang - 1, fwd, eave_y)
+            place(bx, by, bz, ROOF_SLAB_B)
+            bx, by, bz = self.w( hd_hw + overhang + 1, fwd, eave_y)
+            place(bx, by, bz, ROOF_SLAB_B)
+        for dx in range(-hd_hw - overhang, hd_hw + overhang + 1):
+            bx, by, bz = self.w(dx, fwd_front - overhang - 1, eave_y)
+            place(bx, by, bz, ROOF_SLAB_B)
+            bx, by, bz = self.w(dx, fwd_back  + overhang + 1, eave_y)
+            place(bx, by, bz, ROOF_SLAB_B)
+
+        # --- Shimenawa: chain + bell hanging from ceiling centre ---
+        centre_fwd = (fwd_front + fwd_back) // 2
+        rope_y     = eave_y - 1
+        for drop in range(3):
+            bx, by, bz = self.w(0, centre_fwd, rope_y - drop)
+            place(bx, by, bz, CHAIN)
+        # Bell block at the bottom of the rope
+        bx, by, bz = self.w(0, centre_fwd, rope_y - 3)
+        place(bx, by, bz, Block("bell", {"attachment": "ceiling",
+                                          "facing":     "north"}))
+
+        # --- Prayer lanterns flanking the bell ---
+        for side in (-2, 2):
+            bx, by, bz = self.w(side, centre_fwd, rope_y - 1)
+            place(bx, by, bz, CHAIN)
+            bx, by, bz = self.w(side, centre_fwd, rope_y - 2)
+            place(bx, by, bz, HANGING_LANTERN)
+
+        # --- Offering table in front of the back wall ---
+        for dx in range(-2, 3):
+            bx, by, bz = self.w(dx, fwd_back - 1, 1)
+            place(bx, by, bz, rand_stone())
+        # Candles on the table
+        for side in (-2, 0, 2):
+            bx, by, bz = self.w(side, fwd_back - 1, 2)
+            place(bx, by, bz, Block("candle", {"candles": "1", "lit": "true"}))
+
     def build(self):
         print(f"[INFO] Shrine: facing={self.facing}, scale={self.scale}, "
               f"hall={self.hall_w}x{self.hall_d}x{self.hall_h}, "
               f"torii={self.torii_count}")
 
+        # Torii gates spread evenly along the negative-fwd approach path
+        # so the sequence is: torii(s) → haiden entrance (dz=0) → haiden → honden
         approach_step = self.path_len // (self.torii_count + 1)
         for k in range(self.torii_count):
-            fwd_pos = approach_step * (k + 1) - self.path_len
+            fwd_pos = -(self.path_len - approach_step * (k + 1))
             gate_w  = 5 + RNG.randint(0, 2) * 2
-            gate_h  = 8 + RNG.randint(0, 2)   # min 8 ensures lantern room
+            gate_h  = 8 + RNG.randint(0, 2)
             self.build_torii(fwd_pos, gate_w=gate_w, gate_h=gate_h)
 
         self.build_path()
@@ -510,6 +679,7 @@ class ShrineBuilder:
         if self.has_fence:
             self.build_fence()
         self.build_honden()
+        self.build_haiden()
         print("[INFO] Shrine complete.")
 
 # ---------------------------------------------------------------------------
@@ -520,8 +690,12 @@ def main():
     scale  = RNG.randint(1, 3)
     facing = RNG.choice(ORIENTATIONS)
 
+    # Footprint must cover: path_len approach + haiden + gap + honden
+    # path_len = 20+scale*4, haiden_d = 7+scale, gap=4, honden_d = 9+scale*2
+    # total depth ≈ path_len + haiden_d + 4 + honden_d + 6 margin
+    est_d = (20 + scale * 4) + (7 + scale) + 4 + (9 + scale * 2) + 10
+    # width must cover honden 
     est_w = 15 + scale * 4
-    est_d = 30 + scale * 6
     if facing in ("east", "west"):
         fp_w, fp_d = est_d, est_w
     else:
@@ -545,8 +719,30 @@ def main():
     print("[INFO] Levelling terrain...")
     level_ground(world_x0, world_z0, fp_w, fp_d, target_y)
 
-    cx = world_x0 + fp_w // 2
-    cz = world_z0 + fp_d // 2
+    # The shrine origin (dz=0) is the haiden entrance face.
+    # path_len blocks extend in the NEGATIVE-dz direction (torii approach).
+    # So we place the origin path_len + margin from the near edge of the footprint,
+    # and centre on x (width axis).
+    path_len_est = 20 + scale * 4
+    margin       = 4
+
+    if facing == "south":
+        # forward = +z, near edge = world_z0, origin offset from near edge
+        cx = world_x0 + fp_w // 2
+        cz = world_z0 + path_len_est + margin
+    elif facing == "north":
+        # forward = -z, near edge = world_z0 + fp_d
+        cx = world_x0 + fp_w // 2
+        cz = world_z0 + fp_d - path_len_est - margin
+    elif facing == "east":
+        # forward = +x
+        cx = world_x0 + path_len_est + margin
+        cz = world_z0 + fp_d // 2
+    else:  # west
+        # forward = -x
+        cx = world_x0 + fp_w - path_len_est - margin
+        cz = world_z0 + fp_d // 2
+
     ShrineBuilder(cx, target_y, cz, facing=facing, scale=scale).build()
     print("[INFO] Done. See terrain_evaluation.png for heatmaps.")
 
